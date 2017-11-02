@@ -500,11 +500,7 @@ namespace FlatBuffers
             AddInt((int)0);
             var vtableloc = Offset;
             // Write out the current vtable.
-            int i = _vtableSize - 1;
-            // Trim trailing zeroes.
-            for (; i >= 0 && _vtable[i] == 0; i--) {}
-            int trimmedSize = i + 1;
-            for (; i >= 0 ; i--) {
+            for (int i = _vtableSize - 1; i >= 0 ; i--) {
                 // Offset relative to the start of the table.
                 short off = (short)(_vtable[i] != 0
                                         ? vtableloc - _vtable[i]
@@ -517,12 +513,12 @@ namespace FlatBuffers
 
             const int standardFields = 2; // The fields below:
             AddShort((short)(vtableloc - _objectStart));
-            AddShort((short)((trimmedSize + standardFields) *
+            AddShort((short)((_vtableSize + standardFields) *
                              sizeof(short)));
 
             // Search for an existing vtable that matches the current one.
             int existingVtable = 0;
-            for (i = 0; i < _numVtables; i++) {
+            for (int i = 0; i < _numVtables; i++) {
                 int vt1 = _bb.Length - _vtables[i];
                 int vt2 = _space;
                 short len = _bb.GetShort(vt1);
@@ -586,11 +582,37 @@ namespace FlatBuffers
         /// <param name="rootTable">
         /// An offset to be added to the buffer.
         /// </param>
-        public void Finish(int rootTable)
+        public void Finish(int rootTable, bool sizePrefix = false)
         {
-            Prep(_minAlign, sizeof(int));
+            //If prefixing size, adjust the alignment
+            Prep(_minAlign, (sizePrefix ? sizeof(int) : 0) + sizeof(int));
             AddOffset(rootTable);
+
+            if (sizePrefix)
+            {
+                AddInt(GetSize());
+            }
             _bb.Position = _space;
+        }
+
+        public int GetSize()
+        {
+            return _bb.Data.Length - _space;
+        }
+
+        /// <summary>
+        /// Finish a buffer with a 32 bit size field pre-fixed (size of the
+        /// buffer following the size field). These buffers are NOT compatible
+        /// with standard buffers created by Finish, i.e. you can't call GetRoot
+        /// on them, you have to use GetSizePrefixedRoot instead.
+        /// All >32 bit quantities in this buffer will be aligned when the whole
+        /// size pre-fixed buffer is aligned.
+        /// These kinds of buffers are useful for creating a stream of FlatBuffers.
+        /// </summary>
+        /// <param name="rootTable"></param>
+        public void FinishSizePrefixed(int rootTable)
+        {
+            Finish(rootTable, true);
         }
 
         /// <summary>
